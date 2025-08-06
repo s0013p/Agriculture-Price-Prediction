@@ -209,21 +209,24 @@ class SarimaXGBoostEnsembleModel:
                 'upper_bound': 0.0
             })
             
-            # Get SARIMA forecast
+            # In the predict method where you're getting the SARIMA forecast
             sarima_mean = self.sarima_fit.forecast(steps=5)
             # Convert to a list or numpy array to index by position instead of by Pandas index
             sarima_mean_values = sarima_mean.values if hasattr(sarima_mean, 'values') else np.array(sarima_mean)
+
+            # Then use sarima_mean_values instead of sarima_mean when indexing
+            feature_dict['price_lag_1'] = sarima_mean_values[0]
             sarima_conf_int = self.sarima_fit.get_forecast(steps=5).conf_int(alpha=0.05)
             
             # For XGBoost, we need features for future dates
             # Get the last known values from the fitted scaler
+            # This is a more reliable approach than before
             feature_means = self.scaler.mean_[:len(self.feature_columns)]
             
             xgb_predictions = []
             
             for i, future_date in enumerate(future_dates):
                 # Create feature vector for XGBoost - start with basic features
-                # FIXED: Initialize feature_dict here before using it
                 feature_dict = {}
                 
                 # Set basic price features using means from training data
@@ -242,15 +245,15 @@ class SarimaXGBoostEnsembleModel:
                 # For lag and rolling features
                 if i == 0:
                     # Use SARIMA prediction for first day
-                    feature_dict['price_lag_1'] = sarima_mean_values[0]
-                    feature_dict['price_lag_3'] = sarima_mean_values[0]  # Simplified
-                    feature_dict['price_lag_7'] = sarima_mean_values[0]  # Simplified
-                    feature_dict['price_rolling_mean_3'] = sarima_mean_values[0]
-                    feature_dict['price_rolling_mean_7'] = sarima_mean_values[0]
-                    feature_dict['price_rolling_mean_14'] = sarima_mean_values[0]
-                    feature_dict['price_rolling_std_3'] = 0.1 * sarima_mean_values[0]
-                    feature_dict['price_rolling_std_7'] = 0.1 * sarima_mean_values[0]
-                    feature_dict['price_rolling_std_14'] = 0.1 * sarima_mean_values[0]
+                    feature_dict['price_lag_1'] = sarima_mean[0]
+                    feature_dict['price_lag_3'] = sarima_mean[0]  # Simplified
+                    feature_dict['price_lag_7'] = sarima_mean[0]  # Simplified
+                    feature_dict['price_rolling_mean_3'] = sarima_mean[0]
+                    feature_dict['price_rolling_mean_7'] = sarima_mean[0]
+                    feature_dict['price_rolling_mean_14'] = sarima_mean[0]
+                    feature_dict['price_rolling_std_3'] = 0.1 * sarima_mean[0]
+                    feature_dict['price_rolling_std_7'] = 0.1 * sarima_mean[0]
+                    feature_dict['price_rolling_std_14'] = 0.1 * sarima_mean[0]
                 else:
                     # Use previous predictions
                     feature_dict['price_lag_1'] = xgb_predictions[i-1]
@@ -258,12 +261,12 @@ class SarimaXGBoostEnsembleModel:
                     if i >= 3:
                         feature_dict['price_lag_3'] = xgb_predictions[i-3]
                     else:
-                        feature_dict['price_lag_3'] = sarima_mean_values[0]
+                        feature_dict['price_lag_3'] = sarima_mean[0]
                         
                     if i >= 7:
                         feature_dict['price_lag_7'] = xgb_predictions[i-7]
                     else:
-                        feature_dict['price_lag_7'] = sarima_mean_values[0]
+                        feature_dict['price_lag_7'] = sarima_mean[0]
                     
                     # Update rolling features
                     prev_preds = xgb_predictions[:i]
@@ -273,7 +276,7 @@ class SarimaXGBoostEnsembleModel:
                         feature_dict['price_rolling_mean_3'] = np.mean(prev_preds[-3:])
                         feature_dict['price_rolling_std_3'] = np.std(prev_preds[-3:]) if len(prev_preds) > 1 else 0.1 * feature_dict['price_rolling_mean_3']
                     else:
-                        feature_dict['price_rolling_mean_3'] = np.mean(prev_preds + [sarima_mean_values[0]] * (3 - len(prev_preds)))
+                        feature_dict['price_rolling_mean_3'] = np.mean(prev_preds + [sarima_mean[0]] * (3 - len(prev_preds)))
                         feature_dict['price_rolling_std_3'] = 0.1 * feature_dict['price_rolling_mean_3']
                     
                     # For 7-day window
@@ -281,7 +284,7 @@ class SarimaXGBoostEnsembleModel:
                         feature_dict['price_rolling_mean_7'] = np.mean(prev_preds[-7:])
                         feature_dict['price_rolling_std_7'] = np.std(prev_preds[-7:]) if len(prev_preds) > 1 else 0.1 * feature_dict['price_rolling_mean_7']
                     else:
-                        feature_dict['price_rolling_mean_7'] = np.mean(prev_preds + [sarima_mean_values[0]] * (7 - len(prev_preds)))
+                        feature_dict['price_rolling_mean_7'] = np.mean(prev_preds + [sarima_mean[0]] * (7 - len(prev_preds)))
                         feature_dict['price_rolling_std_7'] = 0.1 * feature_dict['price_rolling_mean_7']
                     
                     # For 14-day window (simplified since we're only predicting 5 days)

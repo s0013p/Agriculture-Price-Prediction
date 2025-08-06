@@ -708,7 +708,6 @@ def render_price_analysis():
         except:
             pass
 
-
 def render_price_prediction():
     st.title("Commodity Price Prediction")
     
@@ -822,6 +821,12 @@ def render_price_prediction():
                             st.error("Failed to generate predictions. Please try another date or commodity.")
                             return
                         
+                        # Continue only if predictions are not empty
+                        st.subheader("Price Predictions for Next 5 Days")
+                        
+                        # Debug: Display dataframe column names and head
+                        st.write(f"Debug: Prediction columns: {predictions.columns.tolist()}")
+                        
                         # Ensure predictions have proper columns
                         required_columns = ['date', 'predicted_price', 'lower_bound', 'upper_bound']
                         missing_columns = [col for col in required_columns if col not in predictions.columns]
@@ -849,7 +854,7 @@ def render_price_prediction():
                         st.table(pd.DataFrame(price_data))
                         
                         # Create prediction cards with ranges
-                        st.markdown("### Price Prediction")
+                        st.markdown("### Prediction Cards")
                         cols = st.columns(5)
                         for idx, (_, row) in enumerate(predictions.iterrows()):
                             with cols[idx]:
@@ -861,6 +866,43 @@ def render_price_prediction():
                                 </div>
                                 """, unsafe_allow_html=True)
                         
+                        # Plot predictions with confidence intervals
+                        fig = go.Figure()
+                        
+                        # Add predicted price line
+                        fig.add_trace(go.Scatter(
+                            x=predictions['date'],
+                            y=predictions['predicted_price'],
+                            name='Price Prediction',
+                            line=dict(color='red', width=2)
+                        ))
+                        
+                        # Add confidence interval as a filled area
+                        fig.add_trace(go.Scatter(
+                            x=predictions['date'].tolist() + predictions['date'].tolist()[::-1],
+                            y=predictions['upper_bound'].tolist() + predictions['lower_bound'].tolist()[::-1],
+                            fill='toself',
+                            fillcolor='rgba(231,107,107,0.2)',
+                            line=dict(color='rgba(255,255,255,0)'),
+                            showlegend=True,
+                            name=f'{confidence_level}% Confidence Interval'
+                        ))
+                        
+                        fig.update_layout(
+                            title=f'5-Day Price Forecast with {confidence_level}% Confidence Interval',
+                            xaxis_title='Date',
+                            yaxis_title='Price (₹)',
+                            hovermode='x unified',
+                            legend=dict(
+                                orientation="h",
+                                yanchor="bottom",
+                                y=1.02,
+                                xanchor="right",
+                                x=1
+                            )
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
                 except Exception as e:
                     st.error(f"Error during prediction: {str(e)}")
                     import traceback
